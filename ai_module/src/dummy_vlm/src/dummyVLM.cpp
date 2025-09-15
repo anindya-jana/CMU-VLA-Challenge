@@ -7,8 +7,6 @@
 #include <nav_msgs/Odometry.h>
 #include <geometry_msgs/Pose2D.h>
 #include <visualization_msgs/Marker.h>
-#include <std_msgs/String.h>
-#include <std_msgs/Int32.h>
 
 #include <tf/transform_datatypes.h>
 #include <tf/transform_broadcaster.h>
@@ -26,8 +24,6 @@ float objMidX, objMidY, objMidZ, objL, objW, objH, objHeading;
 string objLabel;
 
 float vehicleX = 0, vehicleY = 0;
-
-string question;
 
 // reading waypoints from file function
 void readWaypointFile()
@@ -117,9 +113,36 @@ void readObjectListFile()
   for (int i = 1; s[i] != '"' && i < 100; i++) objLabel += s[i];
 }
 
-void pubPathWaypoints(ros::Publisher& waypointPub, geometry_msgs::Pose2D& waypointMsgs, ros::Rate& rate)
+
+// vehicle pose callback function
+void poseHandler(const nav_msgs::Odometry::ConstPtr& pose)
 {
-  int waypointID = 0;
+  vehicleX = pose->pose.pose.position.x;
+  vehicleY = pose->pose.pose.position.y;
+}
+
+int main(int argc, char** argv)
+{
+  ros::init(argc, argv, "dummyVLM");
+  ros::NodeHandle nh;
+  ros::NodeHandle nhPrivate = ros::NodeHandle("~");
+
+  nhPrivate.getParam("waypoint_file_dir", waypoint_file_dir);
+  nhPrivate.getParam("object_list_file_dir", object_list_file_dir);
+  nhPrivate.getParam("waypointReachDis", waypointReachDis);
+
+  ros::Subscriber subPose = nh.subscribe<nav_msgs::Odometry> ("/state_estimation", 5, poseHandler);
+
+  ros::Publisher pubWaypoint = nh.advertise<geometry_msgs::Pose2D> ("/way_point_with_heading", 5);
+  geometry_msgs::Pose2D waypointMsgs;
+
+  ros::Publisher pubObjectMarker = nh.advertise<visualization_msgs::Marker>("selected_object_marker", 5);
+  visualization_msgs::Marker objectMarkerMsgs;
+
+  // read waypoints from file
+  readWaypointFile();
+
+  int wayPointID = 0;
   int waypointNum = waypointX.size();
 
   if (waypointNum == 0) {
@@ -127,45 +150,16 @@ void pubPathWaypoints(ros::Publisher& waypointPub, geometry_msgs::Pose2D& waypoi
     exit(1);
   }
 
-  // publish fist waypoint
-  waypointMsgs.x = waypointX[waypointID];
-  waypointMsgs.y = waypointY[waypointID];
-  waypointMsgs.theta = waypointHeading[waypointID];
-  waypointPub.publish(waypointMsgs);
+  // read waypoints from file
+  readObjectListFile();
 
-  bool status = ros::ok();
-  while (status) {
-    ros::spinOnce();
+  // get a line of terminal input
+  printf ("\n\x1B[32mPlease type in the question.\n\n");
+  string input;
+  getline(cin, input);
+  printf ("\n\x1B[0mNavigation starts.\n");
 
-    float disX = vehicleX - waypointX[waypointID];
-    float disY = vehicleY - waypointY[waypointID];
-
-    // move to the next waypoint and publish
-    if (sqrt(disX * disX + disY * disY) < waypointReachDis) {
-      if (waypointID == waypointNum - 1) break;
-      waypointID++;
-
-      waypointMsgs.x = waypointX[waypointID];
-      waypointMsgs.y = waypointY[waypointID];
-      waypointMsgs.theta = waypointHeading[waypointID];
-      waypointPub.publish(waypointMsgs);
-    }
-
-    status = ros::ok();
-    rate.sleep();
-  }
-}
-
-void pubObjectWaypoint(ros::Publisher& waypointPub, geometry_msgs::Pose2D& waypointMsgs)
-{
-  waypointMsgs.x = objMidX;
-  waypointMsgs.y = objMidY;
-  waypointMsgs.theta = 0;
-  waypointPub.publish(waypointMsgs);
-}
-
-void pubObjectMarker(ros::Publisher& objectMarkerPub, visualization_msgs::Marker& objectMarkerMsgs)
-{
+  // publish object marker
   objectMarkerMsgs.header.frame_id = "map";
   objectMarkerMsgs.header.stamp = ros::Time().now();
   objectMarkerMsgs.ns = objLabel;
@@ -183,96 +177,34 @@ void pubObjectMarker(ros::Publisher& objectMarkerPub, visualization_msgs::Marker
   objectMarkerMsgs.color.r = 0;
   objectMarkerMsgs.color.g = 0;
   objectMarkerMsgs.color.b = 1.0;
-  objectMarkerPub.publish(objectMarkerMsgs);
+  pubObjectMarker.publish(objectMarkerMsgs);
 
-}
-
-void delObjectMarker(ros::Publisher& objectMarkerPub, visualization_msgs::Marker& objectMarkerMsgs)
-{
-  objectMarkerMsgs.header.frame_id = "map";
-  objectMarkerMsgs.header.stamp = ros::Time().now();
-  objectMarkerMsgs.ns = objLabel;
-  objectMarkerMsgs.id = objID;
-  objectMarkerMsgs.action = visualization_msgs::Marker::DELETE;
-  objectMarkerMsgs.type = visualization_msgs::Marker::CUBE;
-  objectMarkerPub.publish(objectMarkerMsgs);
-}
-
-void pubNumericalAnswer(ros::Publisher& numericalAnswerPub, std_msgs::Int32& numericalResponseMsg, int32_t numericalResponse)
-{
-  numericalResponseMsg.data = numericalResponse;
-  numericalAnswerPub.publish(numericalResponseMsg);
-}
-
-// vehicle pose callback function
-void poseHandler(const nav_msgs::Odometry::ConstPtr& pose)
-{
-  vehicleX = pose->pose.pose.position.x;
-  vehicleY = pose->pose.pose.position.y;
-}
-
-void questionHandler(const std_msgs::String::ConstPtr& msg)
-{
-  ROS_INFO("Received question");
-  question = msg->data;
-}
-
-int main(int argc, char** argv)
-{
-  ros::init(argc, argv, "dummyVLM");
-  ros::NodeHandle nh;
-  ros::NodeHandle nhPrivate = ros::NodeHandle("~");
-
-  nhPrivate.getParam("waypoint_file_dir", waypoint_file_dir);
-  nhPrivate.getParam("object_list_file_dir", object_list_file_dir);
-  nhPrivate.getParam("waypointReachDis", waypointReachDis);
-
-  ros::Subscriber subPose = nh.subscribe<nav_msgs::Odometry> ("/state_estimation", 5, poseHandler);
-
-  ros::Subscriber subQuestion = nh.subscribe<std_msgs::String>("/challenge_question", 5, questionHandler);
-
-  ros::Publisher waypointPub = nh.advertise<geometry_msgs::Pose2D> ("/way_point_with_heading", 5);
-  geometry_msgs::Pose2D waypointMsgs;
-
-  ros::Publisher objectMarkerPub = nh.advertise<visualization_msgs::Marker>("selected_object_marker", 5);
-  visualization_msgs::Marker objectMarkerMsgs;
-
-  ros::Publisher numericalAnswerPub = nh.advertise<std_msgs::Int32>("/numerical_response", 5);
-  std_msgs::Int32 numericalResponseMsg;
-
-  // read waypoints from file
-  readWaypointFile();
-
-  // read objects from file
-  readObjectListFile();
+  // publish fist waypoint
+  waypointMsgs.x = waypointX[wayPointID];
+  waypointMsgs.y = waypointY[wayPointID];
+  waypointMsgs.theta = waypointHeading[wayPointID];
+  pubWaypoint.publish(waypointMsgs);
 
   ros::Rate rate(100);
-
-  ROS_INFO("Awaiting question...");
-
   bool status = ros::ok();
   while (status) {
     ros::spinOnce();
-    if (question.empty()) continue;
-    if (question.rfind("Find", 0) == 0 || question.rfind("find", 0) == 0) {
-      ROS_INFO("Marking and navigating to object.");
-      pubObjectMarker(objectMarkerPub, objectMarkerMsgs);
-      pubObjectWaypoint(waypointPub, waypointMsgs);
+
+    float disX = vehicleX - waypointX[wayPointID];
+    float disY = vehicleY - waypointY[wayPointID];
+
+    // move to the next waypoint and publish
+    if (sqrt(disX * disX + disY * disY) < waypointReachDis && wayPointID < waypointNum - 1) {
+      wayPointID++;
+
+      waypointMsgs.x = waypointX[wayPointID];
+      waypointMsgs.y = waypointY[wayPointID];
+      waypointMsgs.theta = waypointHeading[wayPointID];
+      pubWaypoint.publish(waypointMsgs);
     }
-    else if (question.rfind("How many", 0) == 0 || question.rfind("how many", 0) == 0) {
-      delObjectMarker(objectMarkerPub, objectMarkerMsgs);
-      int32_t number = (rand() % 10) + 1;
-      ROS_INFO (to_string(number).c_str());
-      pubNumericalAnswer(numericalAnswerPub, numericalResponseMsg, number);
-    }
-    else {
-      delObjectMarker(objectMarkerPub, objectMarkerMsgs);
-      ROS_INFO ("Navigation starts.");
-      pubPathWaypoints(waypointPub, waypointMsgs, rate);
-      ROS_INFO ("Navigation ends.");
-    }
-    question.clear();
-    ROS_INFO("Awaiting question...");
+
+    status = ros::ok();
+    rate.sleep();
   }
 
   return 0;
