@@ -1,0 +1,42 @@
+services:
+  ubuntu20_ros_system:
+    image: docker.io/haochenz11/ubuntu20_ros:cmu_vla_challenge_simulation
+    container_name: ubuntu20_ros_system
+    network_mode: host
+    privileged: true
+    stdin_open: true
+    tty: true
+    working_dir: /home/hw2327106/anindya/CMU-VLA-Challenge
+    devices:
+      - "nvidia.com/gpu=all"
+    environment:
+      - "DISPLAY"
+      - "QT_X11_NO_MITSHM=1"
+      - XAUTHORITY=/tmp/.docker.xauth
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - /etc/localtime:/etc/localtime:ro
+      - /dev/input:/dev/input
+      - /dev/bus/usb:/dev/bus/usb:rw
+      - /home/hw2327106:/home/hw2327106:rw
+
+  ubuntu20_ros:
+    image: localhost/docker_ubuntu20_ros:latest
+    container_name: ubuntu20_ros
+    network_mode: host
+    privileged: true
+    stdin_open: true
+    tty: true
+    working_dir: /home/hw2327106/anindya/CMU-VLA-Challenge
+    devices:
+      - "nvidia.com/gpu=all"
+    environment:
+      - "DISPLAY"
+      - "QT_X11_NO_MITSHM=1"
+      - XAUTHORITY=/tmp/.docker.xauth
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - /etc/localtime:/etc/localtime:ro
+      - /dev/input:/dev/input
+      - /dev/bus/usb:/dev/bus/usb:rw
+      - /home/hw2327106:/home/hw2327106:rw
