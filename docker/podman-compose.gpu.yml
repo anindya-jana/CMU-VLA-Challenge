@@ -1,12 +1,12 @@
 services:
   ubuntu20_ros_system:
-    image: docker.io/haochenz11/ubuntu20_ros:cmu_vla_challenge_simulation
+    image: haochenz11/ubuntu20_ros:cmu_vla_challenge_simulation
     container_name: ubuntu20_ros_system
     network_mode: host
     privileged: true
     stdin_open: true
     tty: true
-    working_dir: /home/hw2327106/anindya/CMU-VLA-Challenge
+    working_dir: /home/${USER}/CMU-VLA-Challenge
     devices:
       - "nvidia.com/gpu=all"
     environment:
@@ -18,16 +18,16 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - /dev/input:/dev/input
       - /dev/bus/usb:/dev/bus/usb:rw
-      - /home/hw2327106:/home/hw2327106:rw
+      - /home/${USER}:/home/${USER}:rw
 
   ubuntu20_ros:
-    image: localhost/docker_ubuntu20_ros:latest
+    image: anindyajana356/ubuntu20_ros:latest
     container_name: ubuntu20_ros
     network_mode: host
     privileged: true
     stdin_open: true
     tty: true
-    working_dir: /home/hw2327106/anindya/CMU-VLA-Challenge
+    working_dir: /home/${USER}/CMU-VLA-Challenge
     devices:
       - "nvidia.com/gpu=all"
     environment:
@@ -39,4 +39,4 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - /dev/input:/dev/input
       - /dev/bus/usb:/dev/bus/usb:rw
-      - /home/hw2327106:/home/hw2327106:rw
+      - /home/${USER}:/home/${USER}:rw
