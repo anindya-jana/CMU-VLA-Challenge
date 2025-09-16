@@ -11,12 +11,12 @@ if ! command -v docker >/dev/null 2>&1; then
   sudo systemctl --now enable docker
 fi
 
-# 2) Add current user to docker group (effective after re-login; we will still use sudo in this session)
+## 2) Add current user to docker group (effective after re-login; we will still use sudo in this session)
 if ! id -nG "$USER" | grep -qw docker; then
   sudo usermod -aG docker "$USER" || true
 fi
 
-# 3) Install NVIDIA Container Toolkit (repo + package)
+## 3) Install NVIDIA Container Toolkit (repo + package)
 if ! command -v nvidia-ctk >/dev/null 2>&1; then
   curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
   curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
@@ -28,18 +28,18 @@ if ! command -v nvidia-ctk >/dev/null 2>&1; then
   sudo systemctl restart docker
 fi
 
-# 4) Validate GPU access
+## 4) Validate GPU access
 sudo docker run --gpus all --rm nvidia/cuda:11.0.3-base-ubuntu20.04 nvidia-smi || true
 
-# 5) Ensure Docker Compose plugin exists
+## 5) Ensure Docker Compose plugin exists
 if ! docker compose version >/dev/null 2>&1; then
   sudo apt-get update && sudo apt-get install -y docker-compose-plugin
 fi
 
-# 6) Allow X server connections (best-effort; may fail on headless)
+## 6) Allow X server connections (best-effort; may fail on headless)
 xhost + || true
 
-# 7) Build and start GPU-enabled services
+## 7) Build and start GPU-enabled services
 sudo docker compose -f docker/compose_gpu.yml up --build -d
 
 
