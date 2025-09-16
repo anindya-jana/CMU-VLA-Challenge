@@ -58,7 +58,7 @@ sudo docker compose -f docker/compose_gpu.yml up --build -d
 
 
 
-# CMU VLA Challenge Docker Instructions(as given by challange)
+# CMU VLA Challenge Docker Instructions(as given in CMU Challenge)
 Two docker images are used for the challenge:
 - `ubuntu20_ros_system`: docker image for the system simulator - this image should NOT be modified
 - `ubuntu20_ros`: docker image for the AI module - this will be the image you modify when developing the model
