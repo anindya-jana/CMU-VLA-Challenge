@@ -1,4 +1,63 @@
 
+# CMU VLA Challenge Installation Instructions
+
+First clone the repo :git clone -b ai-module-updates --single-branch https://github.com/anindya-jana/CMU-VLA-Challenge.git
+
+
+
+
+if ! command -v docker >/dev/null 2>&1; then
+  curl -fsSL https://get.docker.com | sudo sh
+  sudo systemctl --now enable docker
+fi
+
+# 2) Add current user to docker group (effective after re-login; we will still use sudo in this session)
+if ! id -nG "$USER" | grep -qw docker; then
+  sudo usermod -aG docker "$USER" || true
+fi
+
+# 3) Install NVIDIA Container Toolkit (repo + package)
+if ! command -v nvidia-ctk >/dev/null 2>&1; then
+  curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+  curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
+    sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
+    sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list >/dev/null
+  sudo apt-get update
+  sudo apt-get install -y nvidia-container-toolkit
+  sudo nvidia-ctk runtime configure --runtime=docker
+  sudo systemctl restart docker
+fi
+
+# 4) Validate GPU access
+sudo docker run --gpus all --rm nvidia/cuda:11.0.3-base-ubuntu20.04 nvidia-smi || true
+
+# 5) Ensure Docker Compose plugin exists
+if ! docker compose version >/dev/null 2>&1; then
+  sudo apt-get update && sudo apt-get install -y docker-compose-plugin
+fi
+
+# 6) Allow X server connections (best-effort; may fail on headless)
+xhost + || true
+
+# 7) Build and start GPU-enabled services
+sudo docker compose -f docker/compose_gpu.yml up --build -d
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # CMU VLA Challenge Docker Instructions
 Two docker images are used for the challenge:
 - `ubuntu20_ros_system`: docker image for the system simulator - this image should NOT be modified
