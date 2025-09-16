@@ -47,13 +47,12 @@ podman exec -it ubuntu20_ros_system bash -lc "cd /home/${USER}/CMU-VLA-Challenge
 podman exec -it ubuntu20_ros_system bash -lc "export DEBIAN_FRONTEND=noninteractive; apt-get update -y; apt-get install -y --no-install-recommends libpcl-dev pcl-tools ros-noetic-pcl-ros ros-noetic-cv-bridge ros-noetic-image-transport ros-noetic-image-transport-plugins ros-noetic-rviz ros-noetic-tf ros-noetic-diagnostic-updater ros-noetic-diagnostic-aggregator libopencv-dev; ldconfig; [ -e /usr/bin/python ] || ln -s /usr/bin/python3 /usr/bin/python"
 ```
    - Then run.
-
 ```
 bash -lc 'set -e; echo "== Podman runtime repair =="; export XDG_RUNTIME_DIR=/run/user/$(id -u); mkdir -p "$XDG_RUNTIME_DIR/containers"; podman system migrate || true; xhost + &>/dev/null || true; if podman compose version &>/dev/null; then COMPOSE="podman compose -f docker/podman-compose.gpu.yml"; else COMPOSE="podman-compose -f docker/podman-compose.gpu.yml"; fi; echo "== Compose down =="; $COMPOSE down --remove-orphans || true; echo "== Remove old containers =="; podman rm -f ubuntu20_ros_system ubuntu20_ros &>/dev/null || true; echo "== Compose up =="; $COMPOSE up -d; echo "== Status after up =="; podman ps --format "{{.Names}} {{.Status}}"; echo "== Launching SYSTEM (Unity/RViz) =="; podman exec -it ubuntu20_ros_system bash -lc '"'"'set -e; source /opt/ros/noetic/setup.bash; cd /home/'"${USER}"'/CMU-VLA-Challenge; rm -f /root/system_launch.log; nohup ./system_bring_up.sh >/root/system_launch.log 2>&1 & disown; echo SYSTEM_STARTED'"'"'; echo "== Launching AI module =="; podman exec -it ubuntu20_ros bash -lc '"'"'set -e; source /opt/ros/noetic/setup.bash; if [ -f /home/'"${USER}"'/CMU-VLA-Challenge/ai_module/devel/setup.bash ]; then source /home/'"${USER}"'/CMU-VLA-Challenge/ai_module/devel/setup.bash; fi; rm -f /root/ai_launch.log; nohup roslaunch dummy_vlm dummy_vlm.launch >/root/ai_launch.log 2>&1 & disown; echo AI_STARTED'"'"'; sleep 2; echo "== Final status =="; podman ps --format "{{.Names}} {{.Status}}"; echo "--- System log (tail) ---"; podman exec -it ubuntu20_ros_system bash -lc '"'"'for i in $(seq 1 20); do [ -s /root/system_launch.log ] && break; sleep 1; done; tail -n 120 /root/system_launch.log || true'"'"'; echo "--- AI log (tail) ---"; podman exec -it ubuntu20_ros bash -lc '"'"'for i in $(seq 1 20); do [ -s /root/ai_launch.log ] && break; sleep 1; done; tail -n 120 /root/ai_launch.log || true'"'"''
 
 ```
    - Then re-run the launch command above.
-   - 
+
 ## 4) To install owlvit and other dependencies on ai container:
 ```
 podman exec -it ubuntu20_ros bash -lc "
