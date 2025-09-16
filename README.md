@@ -4,12 +4,41 @@
 First clone the repo :git clone -b ai-module-updates --single-branch https://github.com/anindya-jana/CMU-VLA-Challenge.git
 
 
-
-
 <img width="1190" height="1345" alt="Screenshot from 2025-09-16 15-43-15" src="https://github.com/user-attachments/assets/ac359864-57e8-4cd7-a3bf-b20fa317b1f4" />
 
+# CMU VLA Challenge Podman Instructions
+Two docker images are used for the challenge:
+- `ubuntu20_ros_system`: docker image for the system simulator - this image should NOT be modified
+- `ubuntu20_ros`: docker image for the AI module - this will be the image you modify when developing the model
+- 
+###1) Allow X11 and ensure Podman runtime dir
+   xhost +
+   export XDG_RUNTIME_DIR=/run/user/$(id -u)
+   mkdir -p "$XDG_RUNTIME_DIR/containers"
+   chmod 700 "$XDG_RUNTIME_DIR"
+  
+###2) Start containers 
+Option A (native):
+```
+   podman compose -f docker/podman-compose.gpu.yml up -d
+```
+Option B (if native compose unavailable):
+```
+   podman-compose -f docker/podman-compose.gpu.yml up -d
+```
+###3) Launch the simulator (runs Unity + roslaunch):
+    ```
+    podman exec -it ubuntu20_ros_system bash -lc "cd /home/${USER}/CMU-VLA-Challenge && ./launch_system.sh"
+        ```
+    Notes:
 
+   - If you see missing PCL/cv_bridge or image_transport/rviz/tf binaries after a reboot, install once:
+         ```
+       podman exec -it ubuntu20_ros_system bash -lc "export DEBIAN_FRONTEND=noninteractive; apt-get update -y; apt-get install -y --no-install-recommends libpcl-dev pcl-tools ros-noetic-pcl-ros ros-noetic-cv-bridge ros-noetic-image-transport ros-noetic-image-transport-plugins ros-noetic-rviz ros-noetic-tf ros-noetic-diagnostic-updater ros-noetic-diagnostic-aggregator libopencv-dev; ldconfig; [ -e /usr/bin/python ] || ln -s /usr/bin/python3 /usr/bin/python"
+    ```
+   - Then re-run the launch command above.
 
+   
 # CMU VLA Challenge Docker Instructions(as given in CMU Challenge)
 Two docker images are used for the challenge:
 - `ubuntu20_ros_system`: docker image for the system simulator - this image should NOT be modified
