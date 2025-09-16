@@ -7,10 +7,6 @@
 
 [Setting Up](#setting-up)
 - [Challenge Scenes](#challenge-scenes)
-- [Challenge Questions](#challenge-questions)
-- [System](#system)
-- [Simulator](#simulator)
-- [Object-Referential Dataset](#object-referential-dataset-vla-3d)
 
 [Real-Robot Challenge](#real-robot-challenge-2025)
 - [Real-Robot Data](#real-robot-data)
@@ -77,72 +73,6 @@ A total of 18 Unity scenes are used for the challenge. 15 scenes are provided fo
 
 ![image](figures/scenes.png)
 
-### Challenge Questions
-A set of challenge questions for each Unity scene is provided in the pdf files for each of the 15 training scenes under the [questions](questions/) folder. Images of the correct answer in each scene are also provided for visualization purposes and a .ply file of the target trajectory is provided as well. All questions for all training scenes can also be found in JSON format under [questions/questions.json](questions/questions.json).
-
-### System
-
-Our system runs on Ubuntu 20.04 and uses ROS Noetic in both simulation and onboard the real robot. Follow the instructions in the [docker/](docker/) folder to try the simulator by pulling the docker image provided and launching the system.
-
-The system uses Unity environments by default and has two parts:
-- The base navigation system is in the [system/unity](system/unity/) folder. This system can be launched by itself without the AI module running. For the base navigation system, you may change the scene used by placing it in the [system/unity/src/vehicle_simulator/mesh/unity/](system/unity/src/vehicle_simulator/mesh/unity/) directory.
-- The vision-language model should be in the [ai_module](ai_module/) folder. The model currently in the folder under [ai_module/src](ai_module/src) is a "dummy model" that demonstrates how to read input questions and produces arbitrary examples of the different types of output responses which are to be used by the system and the evaluation node. **Teams are expected to come up with a model to replace this one.**
-
-Launching the system startup script [launch.sh](launch.sh) will, by default, launch both the unity simulator and the dummy model. 
-
-#### Dummy Model
-
-The dummy model will read a question as a ROS String message on the `/challenge_question` topic. The dummy model will then either publish an integer as an Int32 message, send bounding box visualization markers for object reference, or waypoints to guide vehicle navigation. The three types of messages are listed below. To integrate the a model with the system, please modify the system startup script.
-- Numerical response: ROS Int32 message on topic `/numerical_response`, containing an integer answering a numerical question.
-- Visualization marker: ROS Marker message on topic `/selected_object_marker`, containing object label and bounding box of the selected object.
-- Waypoint: ROS Pose2D message on topic `/way_point_with_heading` (neglect the heading for this year’s challenge).
-
-#### System Outputs
-The system provides onboard data to the AI module as shown in the table below:
-
-| Message | Description | Frequency | Frame | ROS Topic Name |
-|-|-|-|-|-|
-| Image | ROS Image message from the 360 camera. The image is at 1920/640 resolution with 360 deg HFOV and 120 VFOV. | 10Hz | camera | `/camera/image` |
-| Registered Scan | ROS PointCloud2 message from the 3D lidar and registered by the state estimation module. | 5Hz | map | `/registered_scan` |
-| Sensor Scan | ROS PointCloud2 message from the 3D lidar. | 5Hz | sensor_at_scan | `/sensor_scan` |
-| Local Terrain Map | ROS PointCloud2 message from the terrain analysis module around the vehicle. | 5Hz | map | `/terrain_map` (5m around vehicle) <br> `/terrain_map_ext` (20m around vehicle) |
-| Sensor Pose| ROS Odometry message from the state estimation module. | 100-200Hz | from map to sensor | `/state_estimation` |
-| Traversable Area| ROS PointCloud2 message containing the traversable area of the entire environment. | 5Hz | map | `/traversable_area` |
-| Ground-Truth Semantics| ROS MarkerArray message containing object labels and bounding boxes within 2m around the vehicle. | 5Hz | map | `/object_markers` |
-
-**IMPORTANT NOTE**: While more topics may be available from the system, these are the only ones allowed to be used during test time. During training/development, you are free to use whatever information the system simulator provides.
-
-#### System Inputs
-
-The system takes waypoints output from the AI module to navigate the robot. Waypoints located in the traversable area (listed above) are accepted directly, and waypoints out of the traversable area are adjusted and moved into the traversable area. The system also takes visualization markers output by the module to highlight selected objects. Int32 messages indicating a numerical response are not directly used by the system to navigate the robot, and are read instead by the evaluation node detailed in the [evaluation](#evaluation) section.
-
-The table below lists the ROS topics to use. The waypoints should be used for Instruction-Following questions, the visualization marker should be the output for the Object Reference questions, and the integers for Numerical questions.
-
-| Message | Description | ROS Topic Name |
-|-|-|-|
-| Waypoint with Heading | ROS Pose2D message with position and orientation. | `/way_point_with_heading` |
-| Selected Object Marker | ROS Marker message containing object label and bounding box of the selected object. | `/selected_object_marker` |
-| Numerical Response | ROS Int32 message with an integer as an answer to a numerical question. | `/numerical_response` |
-
-The coordinate frames used by the physical system are shown below. The camera position (camera frame) with respect to the lidar (sensor frame) is measured based on a CAD model. The orientation is calibrated and the images are remapped to keep the camera frame and lidar frame aligned. 
-
-<p align="center">
-  <img src="figures/system.png" alt="system" width="30%"/>
-</p>
-
-### Simulator
-
-In addition to the simulation system described above based on Unity, a second simulator is provided based on AI Habitat and uses Matterport3D environment models, which can be found under [matterport/](system/matterport/). Similarly, the system can be launched, synthesized data can be retrieved, and sending waypoints will navigate the robot in simulation. As a quick example, the command line below sends a waypoint to the system at 1m away from the start point. 
-
-`rostopic pub -1 /way_point_with_heading geometry_msgs/Pose2D '{x: 1.0, y: 0.0, theta: 0.0}'`
-
-Note that the simulation system provided a broader scope of data than the actual challenge but the data can be used to help prepare the AI module. During the challenge, only data listed above in [System](#system) is provided, matching the data onboard the real robot.
-
-![image](figures/simulator.png)
-
-### Object-Referential Dataset (VLA-3D)
-
-To help with the subtask of referential object-grounding, the VLA-3D dataset containing 7.6K indoor 3D scenes with over 11K regions and 9M+ statements is provided. The dataset includes processed scene point clouds, object and region labels, a scene graph of semantic relations, and generated language statements for each 3D scene from a diverse set of data sources and includes the 15 training scenes in Unity. For access to the data and more details on the format, please see our [VLA-3D repository](https://github.com/HaochenZ11/VLA-3D).
 
 ## Real-Robot Challenge (2025)
 
@@ -194,36 +124,7 @@ Note: Teams have a choice whether to use the ground-truth semantics posted on th
 For each question, both re-exploration on system launch and question answering will be timed. Timing will begin immediately at system startup. Each question has a total time limit of **10 minutes** for exploration and question answering combined, regardless of the test scene. Exceeding the time limit for a certain question incurs a penalty on the initial score calculated for the question. Finishing before the allotted time for a question earns bonus points on that question, which will be used to break ties between teams with similar initial scores.
 
 
-## Challenge FAQ
-Any questions regarding the challenge can be asked by opening a Github issue with the "question" label. We encourage you to use this feature so that multiple members of the team can see the question. Questions specific to your team situation can be emailed to haochen4@andrew.cmu.edu or other challenge organizers. Frequently asked questions will be posted here.
 
-1. Are multiple submissions allowed?
-
-    Yes, there is no limit to the number of submissions allowed during the competition. The submission form is set up to allow multiple submissions and we will take your highest scoring one.
-
-2. What are the time constraints for completing the task?
-
-    Please check the [timing](#timing) section.
-
-3. Any restrictions on the usage of LLMs/VLMs/APIs?
-
-    There are no restrictions on using LLMs, VLMs, or online APIs. Any model can be used, however, keep in mind that we will need to be able to run your code and if it needs to query online APIs during runtime, you will have to provide your access token in your code.
-
-4. What is the docker size limit?
-
-    The size limitation depends on the machine we use to run evaluation. The specs for the machine can be found [HERE](https://simplynuc.com/product/nuc13rngi9-full/?gad_source=1&gclid=CjwKCAjwiaa2BhAiE[%E2%80%A6]g4P7AnhLOZQVIoVC9croO7-i74DfuezIOztALzi5RVJ3jv3bxoCxmEQAvD_BwE).
-
-5. How will real-robot evaluation work?
-   
-   All submissions will first be evaluated in simulation first. Valid submissions will then be evaluated on the real-robot system and teams will be invited to schedule a timeslot and connect remotely to assist with the integration and evaluation.
-
-6. Will ground-truth semantics be provided in the real-robot evaluation?
-
-   Yes, ground-truth semantics will be provided in the real-world scene as well. Participants have a choice whether to use ground-truth semantics in their final submission or not and indicate this in the submission form. Methods that use it vs. methods that do not will be scored differently.
-
-8. How will presentation at the IROS workshop work?
-
-   All evaluation will be conducted prior to the IROS conference. The top 3 teams will be contacted with the opportunity to present their method either in-person or remotely.
 
 ## Acknowledgements
 Thank you to [AlphaZ](https://alpha-z.ai/) for sponsoring the challenge for 2025! Their generous support enables us to provide the top three teams with a cash prize.
