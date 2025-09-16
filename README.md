@@ -1,8 +1,10 @@
 
 # CMU VLA Challenge Installation Instructions
 
-First clone the repo :git clone -b ai-module-updates --single-branch https://github.com/anindya-jana/CMU-VLA-Challenge.git
-
+First clone the repo in /home/${USER}:
+```
+git clone -b ai-module-updates --single-branch https://github.com/anindya-jana/CMU-VLA-Challenge.git
+```
 
 <img width="1190" height="1345" alt="Screenshot from 2025-09-16 15-43-15" src="https://github.com/user-attachments/assets/ac359864-57e8-4cd7-a3bf-b20fa317b1f4" />
 
@@ -10,35 +12,89 @@ First clone the repo :git clone -b ai-module-updates --single-branch https://git
 Two docker images are used for the challenge:
 - `ubuntu20_ros_system`: docker image for the system simulator - this image should NOT be modified
 - `ubuntu20_ros`: docker image for the AI module - this will be the image you modify when developing the model
-- 
-###1) Allow X11 and ensure Podman runtime dir
-   xhost +
-   export XDG_RUNTIME_DIR=/run/user/$(id -u)
-   mkdir -p "$XDG_RUNTIME_DIR/containers"
-   chmod 700 "$XDG_RUNTIME_DIR"
   
-###2) Start containers 
+## 1) Allow X11 and ensure Podman runtime dir
+```
+xhost +
+export XDG_RUNTIME_DIR=/run/user/$(id -u)
+mkdir -p "$XDG_RUNTIME_DIR/containers"
+chmod 700 "$XDG_RUNTIME_DIR"
+```
+## 2) Start containers 
+
 Option A (native):
 ```
-   podman compose -f docker/podman-compose.gpu.yml up -d
+podman compose -f docker/podman-compose.gpu.yml up -d
 ```
 Option B (if native compose unavailable):
 ```
-   podman-compose -f docker/podman-compose.gpu.yml up -d
+podman-compose -f docker/podman-compose.gpu.yml up -d
 ```
-###3) Launch the simulator (runs Unity + roslaunch):
-    ```
-    podman exec -it ubuntu20_ros_system bash -lc "cd /home/${USER}/CMU-VLA-Challenge && ./launch_system.sh"
-        ```
-    Notes:
-
+## 3) Ensure both container are running:
+```
+podman start ubuntu20_ros
+```
+```
+podman start ubuntu20_ros_system
+```
+## 4) Launch the simulator (runs Unity + roslaunch):
+```
+podman exec -it ubuntu20_ros_system bash -lc "cd /home/${USER}/CMU-VLA-Challenge && ./launch_system.sh"
+```
+   Notes:
    - If you see missing PCL/cv_bridge or image_transport/rviz/tf binaries after a reboot, install once:
-         ```
-       podman exec -it ubuntu20_ros_system bash -lc "export DEBIAN_FRONTEND=noninteractive; apt-get update -y; apt-get install -y --no-install-recommends libpcl-dev pcl-tools ros-noetic-pcl-ros ros-noetic-cv-bridge ros-noetic-image-transport ros-noetic-image-transport-plugins ros-noetic-rviz ros-noetic-tf ros-noetic-diagnostic-updater ros-noetic-diagnostic-aggregator libopencv-dev; ldconfig; [ -e /usr/bin/python ] || ln -s /usr/bin/python3 /usr/bin/python"
-    ```
+```
+podman exec -it ubuntu20_ros_system bash -lc "export DEBIAN_FRONTEND=noninteractive; apt-get update -y; apt-get install -y --no-install-recommends libpcl-dev pcl-tools ros-noetic-pcl-ros ros-noetic-cv-bridge ros-noetic-image-transport ros-noetic-image-transport-plugins ros-noetic-rviz ros-noetic-tf ros-noetic-diagnostic-updater ros-noetic-diagnostic-aggregator libopencv-dev; ldconfig; [ -e /usr/bin/python ] || ln -s /usr/bin/python3 /usr/bin/python"
+```
    - Then re-run the launch command above.
 
-   
+
+
+## 4) To install owlvit and other dependencies on ai container:
+```
+podman exec -it ubuntu20_ros bash -lc "
+  # Update package lists and install python3 and pip if not already present
+  apt update && \
+  apt install -y python3 python3-pip && \
+  
+  # Install core Python libraries (torch for CPU, transformers, pillow, safetensors)
+  # Using --no-cache-dir to prevent filling up container disk with pip cache
+  pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu && \
+  pip install --no-cache-dir transformers Pillow safetensors && \
+  
+  # Execute the Python script to download and cache the model
+  python3 -c \"
+import sys
+try:
+    from transformers import OwlViTProcessor, OwlViTForObjectDetection
+    print('Transformers library loaded successfully.')
+except ImportError:
+    # Use double quotes for the Python string, and include the single quotes directly
+    print('Error: transformers library not found. Please install it with \\'pip install transformers\\'.', file=sys.stderr)
+    sys.exit(1)
+
+try:
+    print('Attempting to download OwlViT model and processor...')
+    processor = OwlViTProcessor.from_pretrained('google/owlvit-base-patch32')
+    model = OwlViTForObjectDetection.from_pretrained('google/owlvit-base-patch32')
+    print('Model and processor for google/owlvit-base-patch32 have been downloaded and cached.')
+except Exception as e:
+    # f-string using single quotes is clean
+    print(f'An error occurred during model download: {e}', file=sys.stderr)
+    sys.exit(1)
+\"
+"
+```
+ 
+## 5)  Launch the AI module (web UI + ROS node):
+```
+podman exec -it ubuntu20_ros bash -lc "export MPLBACKEND=Agg TRANSFORMERS_OFFLINE=0 HF_HUB_OFFLINE=0; [ -e /usr/bin/python ] || ln -s /usr/bin/python3 /usr/bin/python; source /opt/ros/noetic/setup.bash; source /home/${USER}/CMU-VLA-Challenge/ai_module/devel/setup.bash; roslaunch dummy_vlm dummy_vlm.launch"
+```
+Open the UI in a browser:
+   http://localhost:16552
+
+
+
 # CMU VLA Challenge Docker Instructions(as given in CMU Challenge)
 Two docker images are used for the challenge:
 - `ubuntu20_ros_system`: docker image for the system simulator - this image should NOT be modified
