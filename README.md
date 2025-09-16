@@ -1,4 +1,5 @@
-# CMU-VLA-Challenge
+# CMU-VLA-Challenge(This is the same as challange)
+## To view the updates for the Challenge view the other branch.
 
 ## Table of Contents
 [Introduction](#introduction)  
