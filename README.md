@@ -37,6 +37,10 @@ podman start ubuntu20_ros
 ```
 podman start ubuntu20_ros_system
 ```
+then go to the respective folder and then 
+```
+catkin make
+```
 ## 4) Launch the simulator (runs Unity + roslaunch):
 ```
 podman exec -it ubuntu20_ros_system bash -lc "cd /home/${USER}/CMU-VLA-Challenge && ./launch_system.sh"
