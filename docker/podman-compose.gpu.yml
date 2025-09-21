@@ -1,6 +1,6 @@
 services:
   ubuntu20_ros_system:
-    image: haochenz11/ubuntu20_ros:cmu_vla_challenge_simulation
+    image: docker.io/haochenz11/ubuntu20_ros:cmu_vla_challenge_simulation
     container_name: ubuntu20_ros_system
     network_mode: host
     privileged: true
@@ -21,7 +21,7 @@ services:
       - /home/${USER}:/home/${USER}:rw
 
   ubuntu20_ros:
-    image: anindyajana356/ubuntu20_ros:latest
+    image: docker.io/anindyajana356/ubuntu20_ros:latest
     container_name: ubuntu20_ros
     network_mode: host
     privileged: true
