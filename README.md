@@ -21,7 +21,10 @@ mkdir -p "$XDG_RUNTIME_DIR/containers"
 chmod 700 "$XDG_RUNTIME_DIR"
 ```
 ## 2) Start containers 
-
+You can also install podman-compose via pip3
+```
+pip3 install podman-compose
+```
 Option A (native):
 ```
 podman compose -f docker/podman-compose.gpu.yml up -d
