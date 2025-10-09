@@ -19,9 +19,9 @@ class Planner:
         self.grid_map = None
         self.origin = (0, 0)
         self.resolution = resolution
-        self.min_gap = 0.6
+        self.min_gap = 1.25
         self.nav_complete = False
-        self.safety_buffer = 0.15 
+        self.safety_buffer = 0.15
         self.threshold_distance=0.2
 
     def initialize_grid_map(self):
@@ -107,8 +107,15 @@ class Planner:
         return [(nx, ny) for nx, ny in neighbors if self.is_traversable((nx, ny))]
     
     def find_nearby_points(self, points, threshold):
+        # Guard against empty or singleton lists which can break KDTree or produce empty graphs
+        if not points or len(points) < 2:
+            return []
+
         # Convert points to a NumPy array for KDTree
         point_array = np.array(points)
+        if point_array.size == 0:
+            return []
+
         kdtree = KDTree(point_array)
 
         nearby_pairs = []
@@ -122,29 +129,46 @@ class Planner:
     
 
     def find_optimal_path(self, points, threshold):
-        
+        # Fallbacks for degenerate cases
+        if not points:
+            return []
+
         # Find nearby points within the threshold distance
         nearby_pairs = self.find_nearby_points(points, threshold)
-        
+
         G = nx.Graph()
+        # Ensure nodes exist even if there are no nearby pairs (edgeless graph)
+        G.add_nodes_from(range(len(points)))
+
         for i, j in nearby_pairs:
             start = points[i]
             goal = points[j]
             path = self.compute_shortest_path_distance(start, goal)
             if path:
                 G.add_edge(i, j, weight=len(path))
-        
-        # Solve the TSP using the precomputed distance matrix
-        tsp_path = nx.approximation.traveling_salesman_problem(G, cycle=False)
-    
-        return tsp_path
+
+        # If graph has no edges, fall back to a simple sequential ordering
+        if G.number_of_nodes() == 0:
+            return []
+        if G.number_of_edges() == 0:
+            return list(G.nodes())
+
+        # Solve the TSP using the precomputed distances
+        try:
+            tsp_path = nx.approximation.traveling_salesman_problem(G, cycle=False)
+        except Exception as e:
+            rospy.logwarn(f"TSP failed ({e}); falling back to node order")
+            tsp_path = list(G.nodes())
+
+        # NetworkX may return an iterator; materialize it to a list
+        return list(tsp_path)
 
     def calculate_global_coordinates(self, grid_point):
         x_global = self.origin[0] + grid_point[0] * self.resolution
         y_global = self.origin[1] + grid_point[1] * self.resolution
         return (x_global, -y_global)
 
-    def waypoints_from_path(self, path, points, min_distance=1.0):
+    def waypoints_from_path(self, path, points, min_distance=1.0, subsample_stride=8):
         waypoints = []
         for i in range(len(path) - 1):
             start_point = points[path[i]]
@@ -152,7 +176,27 @@ class Planner:
             short_path = self.compute_shortest_path_distance(start_point, goal_point)
 
             if short_path:
-                for grid_point in short_path:
+                filtered = []
+                for idx, gp in enumerate(short_path):
+                    # always keep endpoints
+                    if idx == 0 or idx == len(short_path) - 1:
+                        filtered.append(gp)
+                        continue
+
+                    # keep turn points (non-collinear with neighbors)
+                    prev_gp = short_path[idx - 1]
+                    next_gp = short_path[idx + 1] if idx + 1 < len(short_path) else None
+                    if next_gp is not None:
+                        v1 = (gp[0] - prev_gp[0], gp[1] - prev_gp[1])
+                        v2 = (next_gp[0] - gp[0], next_gp[1] - gp[1])
+                        is_collinear = (v1[0] * v2[1]) == (v1[1] * v2[0])
+                    else:
+                        is_collinear = True
+
+                    if (idx % subsample_stride) == 0 or not is_collinear:
+                        filtered.append(gp)
+
+                for grid_point in filtered:
                     waypoints.append(self.calculate_global_coordinates(grid_point))
             else:
                 waypoints.append(self.calculate_global_coordinates(goal_point))
@@ -216,9 +260,14 @@ class Planner:
         # Define points to visit
         points = self.get_points_to_visit()
 
-        optimal_path_indices = self.find_optimal_path(points,8.0)
+        # Handle no valid sample points gracefully (avoid null graph/TSP errors)
+        if not points:
+            rospy.logwarn("Planner: no candidate points to visit; returning home waypoint only.")
+            return [(0, 0)]
+
+        optimal_path_indices = self.find_optimal_path(points,4.0)
         grid_x = int(np.floor((self.pose.current_pose.x - self.origin[0]) / 0.25))
-        grid_y = int(np.floor((-1* self.pose.current_pose.y - self.origin[1])/ 0.25))  
+        grid_y = int(np.floor((-1* self.pose.current_pose.y - self.origin[1])/ 0.25))
         current_grid_point = (grid_x, grid_y)
 
         # Find the closest point to the robot's current position in the points list
@@ -230,8 +279,13 @@ class Planner:
                 min_distance = distance
                 closest_point_index = i
 
-        # Insert the closest point index at the start of the optimal path
-        optimal_path_indices.insert(0, closest_point_index)
+        # Ensure there is at least a starting node in the path and avoid inserting None
+        if not optimal_path_indices:
+            if closest_point_index is not None:
+                optimal_path_indices = [closest_point_index]
+        elif closest_point_index is not None and (len(optimal_path_indices) == 0 or optimal_path_indices[0] != closest_point_index):
+            optimal_path_indices.insert(0, closest_point_index)
+
         # Convert path to waypoints
         waypoints = self.waypoints_from_path(optimal_path_indices, points)
         t_end = time.time() - t_start

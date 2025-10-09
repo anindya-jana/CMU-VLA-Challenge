@@ -205,7 +205,15 @@ class StateMachine:
             self.log("Please type in the Question in the box")
         except Exception as e:
             self.log(f"Error creating voxel map: {e}")
-            self.state = State.INITIALIZE
+            # Fallback: initialize an empty voxel map so Q&amp;A can proceed
+            self.voxel_map = VoxelizedPointcloud()
+            try:
+                voxel_map_handler.save_voxel_map(self.voxel_map)
+                self.log("Initialized empty voxel map after error.")
+            except Exception as se:
+                self.log(f"Failed to save empty voxel map: {se}")
+            self.state = State.ASK_QUESTION
+            self.log("Please type in the Question in the box")
 
 
 

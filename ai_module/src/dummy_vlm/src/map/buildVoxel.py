@@ -36,7 +36,8 @@ class SemanticVoxelMap:
 
 
 
-        self.voxel_map = VoxelizedPointcloud()
+        # Use a coarser voxel size to reduce voxelization work and speed up exploration
+        self.voxel_map = VoxelizedPointcloud(voxel_size=0.15)
         self.markers = {}
         self.lock = threading.Lock()
         self.voxel_map_path = 'voxel_map.pkl'
@@ -45,6 +46,8 @@ class SemanticVoxelMap:
         self.preprocessor = None
         self.embedding_dim = 768  # default; will try to infer from model config
         self._offline_semantics = False
+        # Cache for text embeddings to avoid recomputing the same class names
+        self._embed_cache = {}
         self._init_model()
 
     def _init_model(self):
@@ -161,6 +164,7 @@ class SemanticVoxelMap:
         # self.save_voxel_map(self.voxel_map)
 
     def compute_clip_embeddings(self, class_names):
+        # Normalize input to list[str]
         if isinstance(class_names, (np.ndarray, np.generic)):
             class_names = class_names.tolist()
         elif isinstance(class_names, str):
@@ -168,18 +172,32 @@ class SemanticVoxelMap:
         elif not isinstance(class_names, list) or not all(isinstance(name, str) for name in class_names):
             raise TypeError("Input text should be a string, a list of strings or a nested list of strings")
 
+        # If offline or model unavailable, compute deterministic embeddings and cache them
         if self._offline_semantics or self.clip_model is None or self.preprocessor is None:
-            return self._embed_offline(class_names)
+            vecs = self._embed_offline(class_names)
+            # Update cache
+            for name, vec in zip(class_names, vecs):
+                self._embed_cache[name] = vec
+            # Assemble result strictly in requested order from cache
+            ordered = [self._embed_cache[name] for name in class_names]
+            return np.stack(ordered, axis=0) if len(ordered) else np.zeros((0, self.embedding_dim), dtype=np.float32)
 
-        with torch.no_grad():
-            inputs = self.preprocessor(text=class_names, return_tensors="pt")
-            # Move inputs to the appropriate device
-            for k in list(inputs.keys()):
-                inputs[k] = inputs[k].to(_DEVICE)
-            all_clip_tokens = self.clip_model.get_text_features(**inputs)
-            all_clip_tokens = F.normalize(all_clip_tokens, p=2, dim=-1)
-        
-        return all_clip_tokens.cpu().numpy()
+        # Online path: reuse cached vectors and only compute missing ones
+        missing = [name for name in class_names if name not in self._embed_cache]
+        if len(missing) > 0:
+            with torch.no_grad():
+                inputs = self.preprocessor(text=missing, return_tensors="pt")
+                for k in list(inputs.keys()):
+                    inputs[k] = inputs[k].to(_DEVICE)
+                all_clip_tokens = self.clip_model.get_text_features(**inputs)
+                all_clip_tokens = F.normalize(all_clip_tokens, p=2, dim=-1).cpu().numpy()
+            # Update cache with freshly computed embeddings
+            for name, vec in zip(missing, all_clip_tokens):
+                self._embed_cache[name] = vec.astype(np.float32)
+
+        # Return embeddings in the same order as requested
+        ordered = [self._embed_cache[name] for name in class_names]
+        return np.stack(ordered, axis=0) if len(ordered) else np.zeros((0, self.embedding_dim), dtype=np.float32)
 
     def save_voxel_map(self, voxel_map):
         with open(self.voxel_map_path, 'wb') as file:

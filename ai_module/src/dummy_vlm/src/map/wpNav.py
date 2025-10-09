@@ -5,11 +5,12 @@ import math
 import time
 
 class WaypointController:
-    def __init__(self, threshold = 0.65):
+    def __init__(self, threshold = 1.0):
         self.current_pose = Pose2D()
-        self.threshold = threshold 
+        self.threshold = threshold
         self.success_flag = False
-        
+        self._stop = False
+         
         rospy.Subscriber("/state_estimation", Odometry, self.odometry_callback)
         self.waypoint_pub = rospy.Publisher('/way_point_with_heading', Pose2D, queue_size=1000)
 
@@ -38,9 +39,11 @@ class WaypointController:
         return roll_x, pitch_y, yaw_z
 
     def publish_waypoints(self, waypoints):
-        rate = rospy.Rate(1)  # Control loop rate
-        
+        rate = rospy.Rate(8)  # Faster control loop for responsiveness
+         
         for wp in waypoints:
+            if self._stop:
+                break
             print("Next Waypoint: ", wp)
 
             waypoint_msg = Pose2D()
@@ -50,15 +53,15 @@ class WaypointController:
 
             # Publish the waypoint
             start_time = time.time()  # Record the start time
-            timeout = 30  # Timeout duration in seconds
+            timeout = 15  # Timeout duration in seconds
 
-            while not rospy.is_shutdown():
+            while not rospy.is_shutdown() and not self._stop:
                 current_time = time.time()
                 elapsed_time = current_time - start_time  # Calculate elapsed time
                 
                 distance = self.get_distance_to_waypoint(wp)
                 self.waypoint_pub.publish(waypoint_msg)
-                print(distance)
+                # print(distance)
 
                 # Check if waypoint is reached or if timeout has occurred
                 if distance < self.threshold:
@@ -70,9 +73,9 @@ class WaypointController:
 
                 rate.sleep()
 
-        # Set the success flag after all waypoints are reached
-        self.success_flag = True
-        rospy.loginfo("All waypoints reached.")
+        # Set the success flag after all waypoints are reached or stopped
+        self.success_flag = not self._stop
+        rospy.loginfo("All waypoints reached." if not self._stop else "Waypoint publishing stopped.")
     def get_distance_to_waypoint(self, wp):
         # Calculate the distance from the current position to the waypoint
         distance = math.sqrt((wp[0] - self.current_pose.x) ** 2 + (wp[1] - self.current_pose.y) ** 2)
@@ -80,7 +83,11 @@ class WaypointController:
 
     def run(self, waypoints):
         self.success_flag = False  # Reset the success flag
+        self._stop = False  # Reset stop flag
         self.publish_waypoints(waypoints)
         return self.success_flag
+
+    def stop(self):
+        self._stop = True
 
 
